@@ -1,0 +1,17 @@
+#Termux
+adb shell device_config set_sync_disabled_for_tests persistent
+    adb shell device_config put activity_manager max_phantom_processes 2147483647
+    adb shell device_config put activity_manager phantom_process_killing_enabled false
+
+
+
+
+#Tasker
+adb shell pm grant net.dinglisch.android.taskerm android.permission.WRITE_SECURE_SETTINGS
+
+
+adb shell pm grant net.dinglisch.android.taskerm android.permission.SET_VOLUME_KEY_LONG_PRESS_LISTENER
+
+
+
+
