@@ -1,0 +1,27 @@
+import subprocess
+import os
+# Start a detached session named 'hi' if it doesn't exist
+subprocess.run(["tmux", "new-session", "-d", "-s", "ily"], stderr=subprocess.DEVNULL)
+    
+# Send the echo command to the 'hi' session
+subprocess.run(["tmux", "send-keys", "-t", "ily", "python figlet_time.py", "C-m"])
+
+
+
+
+
+# This splits the pane and runs 'script.py'
+# Note: The pane will close as soon as the script finishes.
+subprocess.run(["tmux", "split-window", "-v", "python", "go"])
+
+
+
+
+
+
+os.system("tmux attach -t ily")
+
+
+
+
+

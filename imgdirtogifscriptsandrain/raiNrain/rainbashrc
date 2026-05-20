@@ -1,0 +1,61 @@
+#__________style_____________________________
+clear  
+echo -e "\e[31m  ######   ######  \n ######### ######### \n########### ###########\n ##################### \n  ########x9#########  \n    ###############    \n      ###########      \n        #######        \n          ###          \n           #           \e[0m"  
+echo xx
+echo volumeqon
+echo volumeqoff
+echo cls
+echo rain
+echo death
+
+
+
+
+echo -e "\e[38;5;88mA\e[38;5;234mliases:\n     * \e[38;5;88mt\e[38;5;234mhrow\n     * \e[38;5;88mh\e[38;5;234mthrow\e[0m"
+
+
+echo -e "\e[38;5;172mgravelbeach1, gravelbeach2, gravelbeach3\e[0m"
+
+echo -e "\e[38;5;172m123cards"
+
+
+echo
+echo
+echo
+echo
+echo -e "\e[34mG\e[31mr\e[33ma\e[32mv\e[34me\e[31ml\e[33mB\e[32me\e[34ma\e[31mc\e[33mh\e[0m"
+echo
+echo
+
+
+
+#__________aliases___________________________
+alias throw='echo "Starting server at: http://$(termux-wifi-connectioninfo | jq -r .ip):8000"; python -m http.server 8000'
+alias hthrow='HOTSPOT_IP=$(ifconfig 2>/dev/null | grep -A 1 "wlan" | grep "inet " | awk "{print \$2}" | sed "s/addr://" | head -n 1); echo "Detected Hotspot IP: $HOTSPOT_IP"; echo "Starting server at: http://$HOTSPOT_IP:8000"; python -m http.server 8000'
+alias xx="cd ~/x/50Days"
+alias volumeqon="python /data/data/com.termux/files/home/.termux/heydothat.py on"
+alias volumeqoff="python /data/data/com.termux/files/home/.termux/heydothat.py off"
+alias cls="cd ~ && clear && source .bashrc"
+alias death="pkill -u $(whoami)"
+
+alias rain="python /data/data/com.termux/files/home/.termux/rain.py"
+
+
+#_________chromebook 123 parity_______________
+
+alias gravelbeach1="am start -n com.google.android.apps.tasks/com.google.android.apps.tasks.ui.TaskListsActivity"
+alias gravelbeach2="am start -n com.google.android.calendar/com.android.calendar.AllInOneActivity"
+alias gravelbeach3="am start -a android.intent.action.VIEW -d \"https://keep.google.com/#NOTE/1He6YTK_2lDVj3tQI4ZhBVbLhYSmLmcgZZvBtgclFcJ_W2My4rldNS-nAU_wBTlfMYIwY\""
+alias 123cards="gravelbeach1 ; sleep 2 && gravelbeach2 ; sleep 2 && gravelbeach3 && clear && echo 1notes, 2calendar, 3tasks catch with recent apps rapid press"
+
+
+
+
+
+# uncomment, name appropriatley (based on device name off unique wallpaper) and grab correct google keep scratch note url for chromeos android chromebook 123 parity
+#alias roundtops1="am start -n com.google.android.apps.tasks/com.google.android.apps.tasks.ui.TaskListsActivity"
+#alias roundtops2="am start -n com.google.android.calendar/com.android.calendar.AllInOneActivity"
+#alias roundtops3="am start -a android.intent.action.VIEW -d \"https://keep.google.com/#NOTE/1Lp7uTp_rf1FsrX6D_j4UQGeDMJmpXIe_zW4cgICkkns4wznT2nCv6pg-YmrdfpL9Epzo\""
+
+#_________notes______________________________
+######### throw aliases require termux-api package installed and apk installed and jq package installed remember that
