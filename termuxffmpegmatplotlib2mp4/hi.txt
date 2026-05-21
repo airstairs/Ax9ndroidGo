@@ -1,0 +1,5 @@
+git wget figlet cmatrix zip unzip tmux termux-api ffmpeg libjpeg-turbo clang rust python python-numpy  python-pillow python-scipy matplotlib 
+
+
+lolcat flask
+what else?
