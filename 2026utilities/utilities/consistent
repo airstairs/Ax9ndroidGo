@@ -1,0 +1,9 @@
+import os
+
+
+
+message = ""
+for i in range(10000):
+    message+="x9"
+while True:
+    os.system(f"echo {message} | lolcat")

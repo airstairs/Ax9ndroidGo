@@ -1,0 +1,7 @@
+import os
+import time
+while True:
+    os.system("clear")
+    time.sleep(0.1)
+    os.system("cat hi.txt | lolcat")
+    time.sleep(0.4)

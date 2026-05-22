@@ -1,0 +1,25 @@
+import numpy as np
+import time
+import os
+
+alphabet = [' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+secret_message = "fuck bitches get money"
+
+go = True
+i = 0
+my_string = ""
+while go:
+    letter_guess = alphabet[np.random.randint(len(alphabet))]
+    time.sleep(0.03)
+    #print(my_string + letter_guess)
+    os.system(f"figlet \"{my_string + letter_guess}\"")
+    if letter_guess == secret_message[i]:
+        my_string += letter_guess
+        i += 1
+    if i >= len(secret_message):
+        go = False
+    os.system("clear")
+
+for i in range(9):
+    print(f"{secret_message} + {"!"*i}")
+    time.sleep(0.057*i)

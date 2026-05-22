@@ -1,0 +1,26 @@
+import os
+import time
+
+os.system("clear")
+go = True
+message="uhhhh...."
+while go:
+	mess = ""
+	for char in message:
+		mess+=char
+		print(mess)
+		time.sleep(0.3)
+		os.system("clear")
+
+	timethen = time.time()
+	go1 = True
+	while go1:
+		os.system("clear")
+		print(message)
+		os.system(f"figlet \"\'apple\'\" | lolcat")
+		time.sleep(0.7)
+
+		if time.time() - timethen >3:
+			go1 = False
+			os.system("clear")
+		
