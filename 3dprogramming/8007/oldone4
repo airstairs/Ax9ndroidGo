@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Pixel Cloud Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Mobile-friendly UI overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 10;
+            pointer-events: none; /* Let touch events pass through to canvas if not on buttons */
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: white;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto; /* Re-enable touch for buttons */
+            max-width: fit-content;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            background: rgba(0,0,0,0.85);
+            padding: 15px 25px;
+            border-radius: 20px;
+            display: none;
+            z-index: 100;
+            pointer-events: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <label for="file-input" class="btn">📸 Upload Image</label>
+        <input type="file" id="file-input" accept="image/*">
+        <button id="reset-btn" class="btn" style="display: none;">🔄 Reset View</button>
+    </div>
+
+    <div id="loading">Processing Pixels...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Track photo dimensions across functions for dynamic camera math
+        let currentWidth = 200;
+        let currentHeight = 200;
+
+        // --- Scene & Core Configurations ---
+        const container = document.getElementById('canvas-container');
+        const loadingEl = document.getElementById('loading');
+        const resetBtn = document.getElementById('reset-btn');
+        
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 0, 300);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Dynamic cap to keep high frames on mobile screen resolutions
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        // --- Mobile Touch Gestures (OrbitControls) ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // Enables smooth deceleration slide effect on swipe
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 2000;
+        controls.minDistance = 5;
+
+        let currentPoints = null;
+
+        // --- File Upload Handling ---
+        const fileInput = document.getElementById('file-input');
+        fileInput.addEventListener('change', handleImageUpload);
+
+        function handleImageUpload(event) {
+            // Safety Check: Verify files array is populated
+            if (!event.target || !event.target.files || event.target.files.length === 0) {
+                alert("No file was selected or system access was denied.");
+                return;
+            }
+
+            const file = event.target.files;
+
+            // Safety Check: Verify mobile storage handed back a valid object structure
+            if (!file || !(file instanceof Blob)) {
+                alert("Mobile file picker returned an invalid system object. Try picking directly from your internal Gallery/Photos app instead of shortcuts.");
+                return;
+            }
+
+            loadingEl.style.display = 'block';
+
+            // Bypass FileReader string translation for a clean, explicit memory URL reference
+            const objectURL = URL.createObjectURL(file);
+            
+            const img = new Image();
+            img.onload = function() {
+                try {
+                    create3DPixels(img);
+                    URL.revokeObjectURL(objectURL); // Drop pointer reference once mapped to canvas memory
+                } catch (err) {
+                    alert("Error constructing 3D scene: " + err.message);
+                    loadingEl.style.display = 'none';
+                }
+            };
+            img.onerror = function() {
+                alert("Failed to decode image data. The file format might be incompatible.");
+                loadingEl.style.display = 'none';
+                URL.revokeObjectURL(objectURL);
+            };
+            
+            img.src = objectURL;
+        }
+
+        // --- Data Parsing & Geometry Generation ---
+        function create3DPixels(img) {
+            if (currentPoints) {
+                scene.remove(currentPoints);
+                currentPoints.geometry.dispose();
+                currentPoints.material.dispose();
+            }
+
+            // Memory & Matrix Constraint: Bounds pixel structure to protect mobile VRAM limits
+            const maxDimension = 200; 
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            currentWidth = width;
+            currentHeight = height;
+
+            // Paint to hidden document element to pull flat color channel matrices
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+
+            const numPixels = width * height;
+            const positions = new Float32Array(numPixels * 3);
+            const colors = new Float32Array(numPixels * 3);
+
+            let index = 0;
+            const offsetX = width / 2;
+            const offsetY = height / 2;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const r = data[i] / 255;
+                    const g = data[i + 1] / 255;
+                    const b = data[i + 2] / 255;
+                    const a = data[i + 3] / 255;
+
+                    if (a < 0.1) continue; // Drop structural calculations for alpha channel blanks
+
+                    // Map relative point depth down the Z axis using relative color luminance
+                    const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+                    const zDepth = brightness * 50; 
+
+                    positions[index * 3] = x - offsetX;
+                    positions[index * 3 + 1] = (height - y) - offsetY; // Invert alignment to flip image normal right side up
+                    positions[index * 3 + 2] = zDepth;
+
+                    colors[index * 3] = r;
+                    colors[index * 3 + 1] = g;
+                    colors[index * 3 + 2] = b;
+
+                    index++;
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions.subarray(0, index * 3), 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors.subarray(0, index * 3), 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 2.5, 
+                vertexColors: true,
+                sizeAttenuation: true
+            });
+
+            currentPoints = new THREE.Points(geometry, material);
+            scene.add(currentPoints);
+
+            // Re-center perspective automatically relative to new bounds
+            const maxDim = Math.max(width, height);
+            camera.position.set(0, 0, maxDim * 1.6);
+            controls.target.set(0, 0, 25);
+            controls.update();
+
+            resetBtn.style.display = 'block';
+            loadingEl.style.display = 'none';
+        }
+
+        // --- UI Interactions & Resize Events ---
+        resetBtn.addEventListener('click', () => {
+            if (!currentPoints) return;
+            controls.reset();
+            camera.position.set(0, 0, Math.max(currentWidth, currentHeight) * 1.6);
+            controls.target.set(0, 0, 25);
+            controls.update();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Continuous Render Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Keeps damping math functional during multi-touch touch-pan events
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

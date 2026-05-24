@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Pixel Cloud Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: auto;
+            max-width: fit-content;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            display: none;
+            z-index: 100;
+            pointer-events: none;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <label for="file-input" class="btn">📸 Upload Image</label>
+        <input type="file" id="file-input" accept="image/*">
+        <button id="reset-btn" class="btn" style="display: none;">🔄 Reset View</button>
+    </div>
+
+    <div id="loading">Processing Pixels...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Global dimensions for resetting
+        let currentWidth = 250;
+        let currentHeight = 250;
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const loadingEl = document.getElementById('loading');
+        const resetBtn = document.getElementById('reset-btn');
+        
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 0, 300);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        // --- Touch Controls ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 2000;
+        controls.minDistance = 10;
+
+        let currentPoints = null;
+
+        // --- Image Processing ---
+        const fileInput = document.getElementById('file-input');
+        fileInput.addEventListener('change', handleImageUpload);
+
+        function handleImageUpload(event) {
+            const file = event.target.files;
+            if (!file) return;
+
+            loadingEl.style.display = 'block';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        create3DPixels(img);
+                    } catch (err) {
+                        alert("Error generating 3D pixels: " + err.message);
+                        loadingEl.style.display = 'none';
+                    }
+                };
+                img.onerror = function() {
+                    alert("Failed to load image element.");
+                    loadingEl.style.display = 'none';
+                };
+                img.src = e.target.result;
+            };
+            reader.onerror = function() {
+                alert("Failed to read file.");
+                loadingEl.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function create3DPixels(img) {
+            if (currentPoints) {
+                scene.remove(currentPoints);
+                currentPoints.geometry.dispose();
+                currentPoints.material.dispose();
+            }
+
+            const maxDimension = 200; // Dropped slightly for safer memory limits on older mobile devices
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            currentWidth = width;
+            currentHeight = height;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+
+            const numPixels = width * height;
+            const positions = new Float32Array(numPixels * 3);
+            const colors = new Float32Array(numPixels * 3);
+
+            let index = 0;
+            const offsetX = width / 2;
+            const offsetY = height / 2;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const r = data[i] / 255;
+                    const g = data[i + 1] / 255;
+                    const b = data[i + 2] / 255;
+                    const a = data[i + 3] / 255;
+
+                    if (a < 0.1) continue;
+
+                    const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+                    const zDepth = brightness * 50; 
+
+                    positions[index * 3] = x - offsetX;
+                    positions[index * 3 + 1] = (height - y) - offsetY;
+                    positions[index * 3 + 2] = zDepth;
+
+                    colors[index * 3] = r;
+                    colors[index * 3 + 1] = g;
+                    colors[index * 3 + 2] = b;
+
+                    index++;
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions.subarray(0, index * 3), 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors.subarray(0, index * 3), 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 2.5, // Slightly bigger point size for better visibility
+                vertexColors: true,
+                sizeAttenuation: true
+            });
+
+            currentPoints = new THREE.Points(geometry, material);
+            scene.add(currentPoints);
+
+            const maxDim = Math.max(width, height);
+            camera.position.set(0, 0, maxDim * 1.6);
+            controls.target.set(0, 0, 25);
+            controls.update();
+
+            resetBtn.style.display = 'block';
+            loadingEl.style.display = 'none';
+        }
+
+        resetBtn.addEventListener('click', () => {
+            if (!currentPoints) return;
+            controls.reset();
+            camera.position.set(0, 0, Math.max(currentWidth, currentHeight) * 1.6);
+            controls.target.set(0, 0, 25);
+            controls.update();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
