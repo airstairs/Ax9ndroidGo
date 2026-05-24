@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Pixel Image Spinner</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: sans-serif;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        input[type="file"] {
+            margin-top: 10px;
+            display: block;
+        }
+        p {
+            margin: 0 0 5px 0;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <p><strong>Controls:</strong> Left Click + Drag to rotate | Right Click + Drag to pan | Scroll to zoom</p>
+        <label for="imageLoader">Upload an Image (Keep it small for performance, e.g., 50x50):</label>
+        <input type="file" id="imageLoader" accept="image/*">
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 100);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Controls ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 100);
+        scene.add(directionalLight);
+
+        // --- Global Variables for Particle Tracking ---
+        let cubeGroup = new THREE.Group();
+        scene.add(cubeGroup);
+
+        // --- Image Processing & Cube Generation ---
+        document.getElementById('imageLoader').addEventListener('change', handleImage, false);
+
+        function handleImage(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    build3DPixels(img);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files);
+        }
+
+        function build3DPixels(img) {
+            // Clear previous cubes if any
+            while(cubeGroup.children.length > 0){ 
+                const obj = cubeGroup.children;
+                obj.geometry.dispose();
+                obj.material.dispose();
+                cubeGroup.remove(obj); 
+            }
+
+            // Downsample image if it's too massive to prevent browser crash
+            const maxDimension = 64; 
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            // Create a temporary hidden canvas to scrape pixel data
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const imgData = ctx.getImageData(0, 0, width, height).data;
+
+            // Reuse a single box geometry for massive performance gains
+            const boxSize = 0.8; 
+            const geometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
+
+            // Offset to center the image grid at (0,0,0)
+            const offsetX = width / 2;
+            const offsetY = height / 2;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    // PNGs/JPEGs have 4 array slots per pixel: R, G, B, A
+                    const index = (y * width + x) * 4;
+                    const r = imgData[index];
+                    const g = imgData[index + 1];
+                    const b = imgData[index + 2];
+                    const a = imgData[index + 3];
+
+                    // Skip completely transparent pixels
+                    if (a < 10) continue; 
+
+                    // Create material with the exact pixel color
+                    const color = new THREE.Color(`rgb(${r}, ${g}, ${b})`);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        roughness: 0.4,
+                        metalness: 0.1
+                    });
+
+                    const cube = new THREE.Mesh(geometry, material);
+
+                    // Position cubes. Invert Y so the image isn't upside down.
+                    cube.position.x = x - offsetX;
+                    cube.position.y = -y + offsetY;
+                    cube.position.z = 0;
+
+                    cubeGroup.add(cube);
+                }
+            }
+
+            // Adjust camera distance dynamically based on image size
+            camera.position.z = Math.max(width, height) * 1.2;
+            controls.target.set(0, 0, 0);
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Spin every individual cube on its own axis
+            cubeGroup.children.forEach(cube => {
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.015;
+            });
+
+            // Optional: Slowly rotate the entire image structure as a whole
+            // cubeGroup.rotation.y += 0.002;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Window Resize Handler ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start the loop
+        animate();
+    </script>
+</body>
+</html>
