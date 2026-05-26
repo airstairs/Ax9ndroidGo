@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Infinite Mandelbrot Zoom</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <script>
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. Target Coordinates ---
+        // This is a famous, highly detailed coordinate point in the Mandelbrot set
+        const targetX = -0.743643887037158704752191506114774;
+        const targetY =  0.131825904205311970493132056385139;
+
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            u_zoom: { value: 1.0 },
+            u_center: { value: new THREE.Vector2(targetX, targetY) }
+        };
+
+        // --- 3. Shaders ---
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_zoom;
+            uniform vec2 u_center;
+            varying vec2 vUv;
+
+            void main() {
+                // Normalize and adjust aspect ratio
+                vec2 st = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+
+                // Scale screen space to fractal space using zoom factor
+                vec2 c = st * (3.5 / u_zoom) + u_center;
+                vec2 z = vec2(0.0);
+                
+                float iter = 0.0;
+                const float max_iter = 250.0; // Higher iterations for deeper structural detail
+
+                for (float i = 0.0; i < max_iter; i++) {
+                    if (dot(z, z) > 4.0) {
+                        iter = i;
+                        break;
+                    }
+                    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+                }
+
+                if (iter >= max_iter) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                } else {
+                    // Smooth coloring algorithm to prevent blocky color bands
+                    float log_zn = log(dot(z, z)) / 2.0;
+                    float nu = log(log_zn / log(2.0)) / log(2.0);
+                    float smoothed_iter = iter + 1.0 - nu;
+                    
+                    float t = smoothed_iter / max_iter;
+                    
+                    // Electric psychedelic palette
+                    vec3 color = vec3(
+                        0.5 + 0.5 * sin(3.0 + t * 30.0),
+                        0.5 + 0.5 * sin(4.0 + t * 45.0),
+                        0.5 + 0.5 * sin(6.0 + t * 60.0)
+                    );
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            }
+        `;
+
+        // --- 4. Mesh Creation ---
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.ShaderMaterial({
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            uniforms: uniforms
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        // --- 5. Clean, Loopable Zoom Loop ---
+        let currentZoom = 0.5;
+        const maxZoomLimit = 300000.0; // The threshold right before 32-bit floats degrade
+        const zoomSpeed = 1.035;       // Speed multiplier per frame
+
+        const animate = function () {
+            requestAnimationFrame(animate);
+
+            // Zoom inward
+            currentZoom *= zoomSpeed;
+
+            // If we approach the mobile GPU precision wall, smoothly reset back out
+            if (currentZoom > maxZoomLimit) {
+                currentZoom = 0.5;
+            }
+
+            uniforms.u_zoom.value = currentZoom;
+            renderer.render(scene, camera);
+        };
+
+        // --- 6. Resize Event ---
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // Fire up the simulation
+        animate();
+    </script>
+</body>
+</html>

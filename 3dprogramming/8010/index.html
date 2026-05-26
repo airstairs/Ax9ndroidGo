@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Three.js Mandelbrot Touch Zoom</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            text-shadow: 1px 1px 3px black;
+            font-size: 14px;
+            pointer-events: none;
+            font-family: monospace;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="info">Touch & hold to shift zoom target</div>
+
+    <script>
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. Uniforms & Control States ---
+        // We use structures to track zoom level and target center coordinates
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            u_zoom: { value: 1.0 },
+            u_center: { value: new THREE.Vector2(-0.7, 0.0) } // Nice starting spot
+        };
+
+        // Target variables for smooth interpolation (easing)
+        let zoomSpeed = 1.02; 
+        let targetCenter = new THREE.Vector2(-0.7, 0.0);
+        let currentCenter = new THREE.Vector2(-0.7, 0.0);
+        let currentZoom = 1.0;
+
+        // --- 3. Shaders ---
+        // Vertex Shader: Pass through positions
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        // Fragment Shader: Calculates the Mandelbrot set per pixel
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_zoom;
+            uniform vec2 u_center;
+            varying vec2 vUv;
+
+            void main() {
+                // Normalize aspect ratio so fractal isn't stretched
+                vec2 st = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+
+                // Map screen coordinates to the complex plane based on zoom and center
+                vec2 c = st * (3.0 / u_zoom) + u_center;
+                vec2 z = vec2(0.0);
+                
+                float iter = 0.0;
+                const float max_iter = 200.0;
+
+                // Mandelbrot iteration formula: Z(n+1) = Z(n)^2 + C
+                for (float i = 0.0; i < max_iter; i++) {
+                    if (dot(z, z) > 4.0) {
+                        iter = i;
+                        break;
+                    }
+                    // Z^2 + C -> (x^2 - y^2 + cx, 2xy + cy)
+                    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+                }
+
+                // Coloring logic based on iterations
+                if (iter >= max_iter) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Inside the set
+                } else {
+                    // Procedural cosmic/neon coloring
+                    float t = iter / max_iter;
+                    vec3 color = vec3(
+                        0.5 + 0.5 * sin(3.0 + t * 20.0),
+                        0.5 + 0.5 * sin(4.0 + t * 30.0),
+                        0.5 + 0.5 * sin(5.0 + t * 40.0)
+                    );
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            }
+        `;
+
+        // --- 4. Create Mesh ---
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.ShaderMaterial({
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            uniforms: uniforms
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        // --- 5. Touch & Interaction Handling ---
+        function handlePointer(clientX, clientY) {
+            // Convert screen coordinates to normalized device coordinates (-1 to 1)
+            const nx = (clientX / window.innerWidth) * 2 - 1;
+            const ny = -(clientY / window.innerHeight) * 2 + 1;
+
+            // Fix aspect ratio distortion for the input calculation
+            const aspect = window.innerWidth / window.innerHeight;
+            vecPointer = new THREE.Vector2(nx * aspect, ny);
+
+            // Calculate where the user tapped relative to the current center and zoom
+            // This shifts the target center towards the touched area
+            targetCenter.x = currentCenter.x + (nx * (window.innerWidth / window.innerHeight)) * (1.5 / currentZoom);
+            targetCenter.y = currentCenter.y + ny * (1.5 / currentZoom);
+        }
+
+        // Mobile Touch Events
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                handlePointer(e.touches.clientX, e.touches.clientY);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                handlePointer(e.touches.clientX, e.touches.clientY);
+            }
+        }, { passive: true });
+
+        // Optional: Desktop Mouse support for easier testing
+        window.addEventListener('mousedown', (e) => {
+            handlePointer(e.clientX, e.clientY);
+        });
+
+        // --- 6. Animation Loop ---
+        const animate = function () {
+            requestAnimationFrame(animate);
+
+            // Continuously zoom in
+            currentZoom *= zoomSpeed;
+
+            // Smoothly interpolate current center towards the target center (linear interpolation)
+            currentCenter.lerp(targetCenter, 0.05);
+
+            // Update uniforms sent to the GPU GPU
+            uniforms.u_zoom.value = currentZoom;
+            uniforms.u_center.value.copy(currentCenter);
+
+            renderer.render(scene, camera);
+        };
+
+        // --- 7. Window Resizing ---
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        // Start the engine
+        animate();
+    </script>
+</body>
+</html>

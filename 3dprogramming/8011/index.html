@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Three.js Mandelbrot Touch Zoom</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            text-shadow: 1px 1px 3px black;
+            font-size: 14px;
+            pointer-events: none;
+            font-family: monospace;
+            z-index: 10;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="info">Touch & hold to shift zoom target</div>
+
+    <script>
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. Uniforms & Control States ---
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            u_zoom: { value: 1.0 },
+            u_center: { value: new THREE.Vector2(-0.7, 0.0) }
+        };
+
+        let zoomSpeed = 1.015; 
+        let targetCenter = new THREE.Vector2(-0.7, 0.0);
+        let currentCenter = new THREE.Vector2(-0.7, 0.0);
+        let currentZoom = 1.0;
+
+        // --- 3. Shaders ---
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_zoom;
+            uniform vec2 u_center;
+            varying vec2 vUv;
+
+            void main() {
+                vec2 st = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+                vec2 c = st * (3.0 / u_zoom) + u_center;
+                vec2 z = vec2(0.0);
+                
+                float iter = 0.0;
+                const float max_iter = 150.0; // Slightly lower for smoother mobile FPS
+
+                for (float i = 0.0; i < max_iter; i++) {
+                    if (dot(z, z) > 4.0) {
+                        iter = i;
+                        break;
+                    }
+                    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+                }
+
+                if (iter >= max_iter) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                } else {
+                    float t = iter / max_iter;
+                    vec3 color = vec3(
+                        0.5 + 0.5 * sin(3.0 + t * 20.0),
+                        0.5 + 0.5 * sin(4.0 + t * 30.0),
+                        0.5 + 0.5 * sin(5.0 + t * 40.0)
+                    );
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            }
+        `;
+
+        // --- 4. Create Mesh ---
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.ShaderMaterial({
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            uniforms: uniforms
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        // --- 5. Fixed Touch Handling ---
+        function handlePointer(clientX, clientY) {
+            // Normalized Device Coordinates (-1 to 1)
+            const nx = (clientX / window.innerWidth) * 2 - 1;
+            const ny = -(clientY / window.innerHeight) * 2 + 1;
+
+            const aspect = window.innerWidth / window.innerHeight;
+
+            // Calculate target location based exactly on the shader logic
+            targetCenter.x = currentCenter.x + (nx * aspect) * (1.5 / currentZoom);
+            targetCenter.y = currentCenter.y + ny * (1.5 / currentZoom);
+        }
+
+        // Touch Listeners with event prevention to stop mobile zooming/bouncing
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                handlePointer(e.touches.clientX, e.touches.clientY);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                handlePointer(e.touches.clientX, e.touches.clientY);
+            }
+        }, { passive: true });
+
+        // Mouse Listeners for fallback/testing
+        window.addEventListener('mousedown', (e) => {
+            handlePointer(e.clientX, e.clientY);
+        });
+
+        // --- 6. Animation Loop ---
+        const animate = function () {
+            requestAnimationFrame(animate);
+
+            // Zoom in
+            currentZoom *= zoomSpeed;
+
+            // Interpolate toward touch point
+            currentCenter.lerp(targetCenter, 0.03);
+
+            // Update Uniforms
+            uniforms.u_zoom.value = currentZoom;
+            uniforms.u_center.value.copy(currentCenter);
+
+            renderer.render(scene, camera);
+        };
+
+        // --- 7. Resize ---
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
