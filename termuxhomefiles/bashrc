@@ -1,5 +1,6 @@
 alias cls="cd ~ && clear && ls -a"
 alias chs="cd ~/sdcard && clear && ls -a"
+alias crs="clear && ls"
 alias la="cd ~/sdcard/apps/ && clear && echo sh appname; sleep 2 && ls"
 alias lq="python ~/sdcard/Tasker/pythontermuxtools/lq.py"
 alias l="am start ohi.andre.consolelauncher/ohi.andre.consolelauncher.LauncherActivity &> /dev/null"
