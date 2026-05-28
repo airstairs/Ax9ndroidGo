@@ -1,6 +1,6 @@
 ⌨️=echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
 ~=cd /storage/emulated/0
-⬛=clear
+⬛=ios
 🔍=ls
 🟫=echo go > /storage/emulated/0/Tasker/watchtileforchanges/novaismydesk
 🗃️=material files
