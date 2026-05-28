@@ -7,7 +7,7 @@ alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'
 
 while True:
     time.sleep(0.2)
-    messagelength = np.random.randint(38)
+    messagelength = np.random.randint(99938)
     message = ""
     for i in range(messagelength):
         message += alphabet[np.random.randint(len(alphabet))]
