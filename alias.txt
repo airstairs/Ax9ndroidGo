@@ -1,8 +1,8 @@
 ⌨️=echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
 ~=cd /storage/emulated/0
-🧹=clear
-📜=ls
-🪑=echo go > /storage/emulated/0/Tasker/watchtileforchanges/novaismydesk
+⬛=clear
+🔍=ls
+🟫=echo go > /storage/emulated/0/Tasker/watchtileforchanges/novaismydesk
 🗃️=material files
 🔦=flash
 l = echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
