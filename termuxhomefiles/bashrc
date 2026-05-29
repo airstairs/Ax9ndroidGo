@@ -1,3 +1,4 @@
+alias death="pkill -u $(whoami)"
 alias cls="cd ~ && clear && ls -a"
 alias chs="cd ~/sdcard && clear && ls -a"
 alias crs="clear && ls"
