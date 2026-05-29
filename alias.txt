@@ -7,4 +7,3 @@
 🗃️=material files
 l=echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
 huh=alias -ls
-clx= echo go > /storage/emulated/0/Tasker/watchtileforchanges/clx
