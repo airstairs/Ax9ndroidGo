@@ -1,10 +1,10 @@
-⌨️=echo go > /storage/emulated/0/Tasker/watchforchangefiles/tuiisterminal
+⌨️=echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
 ~=cd /storage/emulated/0
 🧹=clear
 📜=ls
-️🪑=echo go > /sdcard/Tasker/watchforchangefiles/novaismydesk
+️🪑=echo go > /sdcard/Tasker/watchtileforchanges/novaismydesk
 📱=lawndesk
 🗃️=material files
-l = echo go > /storage/emulated/0/Tasker/watchforchangefiles/tuiisterminal
-
+l=echo go > /storage/emulated/0/Tasker/watchtileforchanges/tuiistermux
 huh=alias -ls
+clx= echo go > /storage/emulated/0/Tasker/watchtileforchanges/clx
